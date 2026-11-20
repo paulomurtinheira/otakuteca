@@ -7,6 +7,7 @@ import {
 } from '../store.js';
 import { detail as fetchDetail } from '../anilist.js';
 import { icon, openSheet, toast, coverImg, confirmSheet } from '../ui.js';
+import { list as mySources, buildUrl } from '../sources.js';
 
 export const MOODS = [
   ['cry', '😭', 'Chorei'], ['hype', '🔥', 'Hype'], ['mind', '🤯', 'Mind-blown'], ['lol', '😂', 'Muito engraçado'],
@@ -36,7 +37,7 @@ export function openDetail(base) {
   const stack = [];
   let cur = base, extra = null, ticket = 0;
   let root = sh.body;
-  let trackBox, extraBox, dateStart, dateEnd;
+  let trackBox, watchBox, extraBox, dateStart, dateEnd;
 
   const keyNow = () => keyOf(cur.type, cur.id);
 
@@ -87,10 +88,34 @@ export function openDetail(base) {
           it.avg ? h('div', { class: 'comm' }, '★ ' + (it.avg / 10).toFixed(1), h('small', null, ' comunidade')) : null)));
 
     trackBox = h('div', { class: 'box' });
+    watchBox = h('div', { class: 'box' });
     extraBox = h('div', { class: 'extra' });
-    root.append(hero, h('div', { class: 'sheet-content' }, trackBox, mine ? personal(mine) : null, extraBox));
+    root.append(hero, h('div', { class: 'sheet-content' }, trackBox, watchBox, mine ? personal(mine) : null, extraBox));
     renderTrack();
     renderExtra();
+  }
+
+  // ---------- ver o próximo episódio nos sites que tu escolheste ----------
+  function renderWatch() {
+    clear(watchBox);
+    if (cur.type !== 'ANIME') { watchBox.hidden = true; return; }
+    watchBox.hidden = false;
+    const mine = get(keyNow());
+    const it = mine || cur;
+    let ep = mine ? mine.prog + 1 : 1;
+    if (it.eps && ep > it.eps) ep = it.eps;
+    const mySites = mySources();
+    watchBox.append(h('h4', null, `Ver episódio ${ep}`));
+    if (!mySites.length) {
+      watchBox.append(h('p', { class: 'muted small' }, 'Escolhe os sites onde costumas ver e aparecem aqui como botões, já com o título e o episódio.'),
+        h('a', { class: 'btn small', href: '#/settings', onclick: sh.close }, icon('sliders', 15), ' Configurar os meus sites'));
+      return;
+    }
+    const open = (url, cls, ...kids) => h('a', { class: cls, href: buildUrl(url, it, ep), target: '_blank', rel: 'noopener noreferrer', referrerPolicy: 'no-referrer' }, ...kids);
+    watchBox.append(h('div', { class: 'chips' }, mySites.map((s) =>
+      h('span', { class: 'src-pair' },
+        open(s.url, 'btn small', icon('play', 15), ' ' + s.name),
+        s.url2 ? open(s.url2, 'btn small ghost', 'anime') : null))));
   }
 
   // ---------- estado, progresso, nota ----------
@@ -98,6 +123,7 @@ export function openDetail(base) {
     const k = keyNow();
     const mine = get(k);
     clear(trackBox);
+    renderWatch();
 
     trackBox.append(h('div', { class: 'seg wrap' }, STATUSES.map((s) =>
       h('button', {

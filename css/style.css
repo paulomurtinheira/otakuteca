@@ -420,4 +420,13 @@ details.how li { margin: 8px 0; font-size: 14px; }
 .wp-m { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; }
 .wp-m i { width: 100%; background: #fff; border-radius: 5px 5px 2px 2px; opacity: .92; transform-origin: bottom; animation: growy .8s .3s both; } @keyframes growy { from { transform: scaleY(0); } }
 
+/* Os meus sites */
+.src-list { display: grid; gap: 8px; margin: 10px 0 14px; }
+.src-row { display: flex; align-items: center; gap: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 8px 8px 8px 14px; }
+.src-main { flex: 1; min-width: 0; display: grid; }
+.src-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.src-pair { display: inline-flex; gap: 4px; }
+.src-pair .btn.ghost { padding-inline: 10px; color: var(--muted); }
+.settings .panel .lbl + .lbl, .settings .panel .lbl + .btn { margin-top: 10px; }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

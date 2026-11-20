@@ -5,6 +5,7 @@ import { state, setCfg, serialize, mergeIn, normalize, wipeLocal, all } from '..
 import { sync, syncNow, testConnection, onSyncChange, configured } from '../sync.js';
 import { importAniList, importMal } from '../importers.js';
 import { icon, toast, confirmSheet } from '../ui.js';
+import { list as mySources, add as addSource, removeSource } from '../sources.js';
 
 const ago = (t) => {
   if (!t) return 'nunca';
@@ -138,6 +139,49 @@ export function mount(root) {
     h('p', { class: 'muted small' }, 'MyAnimeList: em myanimelist.net/panel/export descarrega o ficheiro e escolhe-o aqui. Importar nunca apaga o que já tens.'),
     imp, jsonIn, malIn);
 
+  // --- os meus sites ---
+  const srcList = h('div', { class: 'src-list' });
+  const srcMsg = h('div', { class: 'msg' });
+  const srcName = h('input', { class: 'field', placeholder: 'O nome que queres ver no botão', maxLength: 30, autocomplete: 'off' });
+  const srcUrl = h('input', { class: 'field', type: 'url', placeholder: 'https://…/{slug}/episodio-{ep}', autocapitalize: 'off', autocomplete: 'off', spellcheck: false });
+  const srcUrl2 = h('input', { class: 'field', type: 'url', placeholder: 'https://…/{slug}  ou  https://…/search?q={titulo}', autocapitalize: 'off', autocomplete: 'off', spellcheck: false });
+  const sayS = (t, cls = '') => { srcMsg.className = 'msg ' + cls; srcMsg.textContent = t; };
+  const paintSources = () => {
+    clear(srcList);
+    const mine = mySources();
+    if (!mine.length) srcList.append(h('p', { class: 'muted small' }, 'Ainda não tens nenhum site.'));
+    for (const s of mine) {
+      srcList.append(h('div', { class: 'src-row' },
+        h('div', { class: 'src-main' }, h('b', null, s.name), h('small', { class: 'muted' }, s.url), s.url2 ? h('small', { class: 'muted' }, 'anime: ' + s.url2) : null),
+        h('button', { class: 'icon-btn', 'aria-label': 'Remover ' + s.name, onclick() { removeSource(s.id); paintSources(); } }, icon('trash', 16))));
+    }
+  };
+  const submitSource = () => {
+    const err = addSource(srcName.value, srcUrl.value, srcUrl2.value);
+    if (err) { sayS(err, 'bad'); return; }
+    srcName.value = ''; srcUrl.value = ''; srcUrl2.value = '';
+    sayS('Adicionado ✔', 'good');
+    paintSources();
+  };
+  const sites = h('div', { class: 'panel' }, h('h3', null, '🔗 Os meus sites'),
+    h('p', { class: 'muted small' }, 'A app não traz nenhum site. Acrescenta tu os que quiseres e em cada anime aparece um botão por site, já com o título e o próximo episódio. Fica guardado só neste aparelho.'),
+    srcList,
+    h('label', { class: 'lbl' }, 'Nome do site', srcName),
+    h('label', { class: 'lbl' }, 'Endereço do episódio', srcUrl),
+    h('label', { class: 'lbl' }, 'Página do anime (opcional)', srcUrl2),
+    h('p', { class: 'muted small' }, 'Se o episódio der erro, o botão "anime" ao lado leva-te a esta página.'),
+    h('button', { class: 'btn primary', onclick: submitSource }, 'Adicionar'),
+    srcMsg,
+    h('details', { class: 'how' }, h('summary', null, 'Como escrever o endereço'),
+      h('p', { class: 'small' }, 'Copia o endereço de um episódio do site e troca as partes variáveis por estas etiquetas:'),
+      h('ul', null,
+        h('li', null, h('code', null, '{titulo}'), ' o título, pronto para pesquisa'),
+        h('li', null, h('code', null, '{slug}'), ' o título em minúsculas com hífens (sousou-no-frieren)'),
+        h('li', null, h('code', null, '{ep}'), ' o número do próximo episódio'),
+        h('li', null, h('code', null, '{ano}'), ' o ano de estreia')),
+      h('p', { class: 'small muted' }, 'Exemplo: https://exemplo.com/anime/{slug}/episodio-{ep}. Se não souberes o formato do site, usa a pesquisa: https://exemplo.com/search?q={titulo}.')));
+  paintSources();
+
   // --- aparência ---
   const prefs = h('div', { class: 'panel' }, h('h3', null, '🎨 Preferências'),
     h('div', { class: 'row gap wrap' },
@@ -157,7 +201,7 @@ export function mount(root) {
     h('p', { class: 'muted small' }, 'Apaga a lista guardada neste aparelho. Se o GitHub estiver ligado, a lista volta no próximo sync (e isso é uma boa forma de a recuperar).'),
     h('button', { class: 'btn danger-ghost', onclick() { confirmSheet({ title: 'Apagar a lista deste aparelho?', text: `${all().length} títulos serão removidos daqui.`, ok: 'Apagar', danger: true, onOk() { wipeLocal(); toast('Lista local apagada'); } }); } }, icon('trash', 16), ' Apagar lista local'));
 
-  body.append(connect, io, prefs, ios, danger, h('p', { class: 'muted small center' }, 'Otakuteca · dados dos títulos: AniList'));
+  body.append(connect, sites, io, prefs, ios, danger, h('p', { class: 'muted small center' }, 'Otakuteca · dados dos títulos: AniList'));
   paintStatus();
   return {};
 }

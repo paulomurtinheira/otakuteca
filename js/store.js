@@ -35,7 +35,7 @@ export const state = {
   data: normalize(load(DK, null)),
   cfg: {
     repo: '', path: 'otakuteca.json', branch: '', token: '', autoSync: true,
-    titleLang: 'romaji', theme: 'dark', lastSync: 0, lastAir: 0,
+    titleLang: 'romaji', theme: 'dark', lastSync: 0, lastAir: 0, sources: [],
     ...load(CK, {}),
   },
   air: load(AK, {}),
