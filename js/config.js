@@ -4,4 +4,4 @@
 // É público por natureza (vai sempre no browser), por isso pode ficar no repositório.
 // Com ele preenchido, quem usa a app só tem de carregar em "Entrar com Google".
 // Se estiver vazio, cada pessoa pode colar o seu em Definições.
-export const GOOGLE_CLIENT_ID = '';
+export const GOOGLE_CLIENT_ID = '1094372000536-77phggcqqd5qofbkmm672bvtb5ggafm8.apps.googleusercontent.com';
