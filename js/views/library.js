@@ -4,10 +4,11 @@ import { h, clear } from '../util.js';
 import { all, STATUSES, statusLabel, titleOf, unseen } from '../store.js';
 import { card, icon, emptyState, seg } from '../ui.js';
 import { openDetail } from './detail.js';
+import { groupLibrary, ensureRelations } from '../series.js';
 import { coverImg } from '../ui.js';
 
 const UK = 'otk_ui_lib';
-const ui = { type: 'ANIME', status: 'ALL', q: '', sort: 'upd', mode: 'grid' };
+const ui = { type: 'ANIME', status: 'ALL', q: '', sort: 'upd', mode: 'grid', group: true };
 try { Object.assign(ui, JSON.parse(localStorage.getItem(UK) || '{}'), { q: '' }); } catch { /* sem prefs */ }
 const saveUi = () => { try { localStorage.setItem(UK, JSON.stringify(ui)); } catch { /* ok */ } };
 
@@ -31,6 +32,8 @@ export function mount(root) {
   });
   const sortSel = h('select', { class: 'field sel', onchange(e) { ui.sort = e.target.value; saveUi(); paint(); } },
     Object.entries(SORTS).map(([v, [l]]) => h('option', { value: v, selected: v === ui.sort }, l)));
+  const groupChk = h('input', { type: 'checkbox', onchange(e) { ui.group = e.target.checked; saveUi(); paint(); } });
+  const groupLbl = h('label', { class: 'check', title: 'Mostra as temporadas e filmes da mesma série como um só título' }, groupChk, ' Juntar temporadas');
   const modeBtn = h('button', { class: 'icon-btn', title: 'Mudar vista', onclick() { ui.mode = ui.mode === 'grid' ? 'list' : 'grid'; saveUi(); paint(); } });
 
   root.append(
@@ -38,18 +41,21 @@ export function mount(root) {
       h('h1', null, 'A minha lista'),
       seg([['ANIME', 'Anime'], ['MANGA', 'Manga']], ui.type, (v) => { ui.type = v; ui.status = 'ALL'; saveUi(); paint(); })),
     summary,
-    h('div', { class: 'toolbar' }, search, sortSel, modeBtn),
+    h('div', { class: 'toolbar' }, search, sortSel, modeBtn, groupLbl),
     tabs, grid);
 
   function paint() {
-    const mine = all().filter((i) => i.type === ui.type);
+    const raw = all().filter((i) => i.type === ui.type);
+    groupChk.checked = ui.group;
+    // uma entrada por série (Naruto + Naruto Shippuden = 1); sem agrupar, uma por temporada
+    const mine = ui.group ? groupLibrary(raw) : raw;
     const unit = ui.type === 'MANGA' ? 'capítulos' : 'episódios';
 
     // resumo
-    const units = mine.reduce((s, i) => s + i.prog, 0);
-    const mins = ui.type === 'ANIME' ? mine.reduce((s, i) => s + i.prog * (i.dur || 24), 0) : 0;
+    const units = raw.reduce((s, i) => s + i.prog, 0);
+    const mins = ui.type === 'ANIME' ? raw.reduce((s, i) => s + i.prog * (i.dur || 24), 0) : 0;
     summary.textContent = mine.length
-      ? `${mine.length} ${ui.type === 'ANIME' ? 'anime' : 'manga'} · ${units} ${unit}` + (mins ? ` · ${(mins / 1440).toFixed(1).replace('.', ',')} dias` : '')
+      ? `${mine.length} ${ui.type === 'ANIME' ? 'anime' : 'manga'}` + (mine.length !== raw.length ? ` (${raw.length} temporadas e filmes)` : '') + ` · ${units} ${unit}` + (mins ? ` · ${(mins / 1440).toFixed(1).replace('.', ',')} dias` : '')
       : '';
 
     // separadores com contagens
@@ -92,16 +98,18 @@ export function mount(root) {
     }
   }
 
+  const refresh = () => ensureRelations().then((changed) => { if (changed && grid.isConnected) paint(); });
   paint();
-  return { update: paint };
+  refresh();
+  return { update() { paint(); refresh(); } };
 }
 
 function row(i) {
-  const nu = unseen(i);
-  return h('div', { class: 'row-item', style: { '--c': i.color || '#7c6cf0' }, onclick: () => openDetail(i) },
+  const nu = i.parts ? i.parts.reduce((s, p) => s + unseen(p), 0) : unseen(i);
+  return h('div', { class: 'row-item', style: { '--c': i.color || '#7c6cf0' }, onclick: () => openDetail(i.cur || i, i.parts) },
     h('div', { class: 'thumb' }, coverImg(i)),
     h('div', { class: 'ri-main' },
-      h('div', { class: 'ri-t' }, titleOf(i)),
+      h('div', { class: 'ri-t' }, titleOf(i), i.parts ? h('small', { class: 'muted' }, `  · ${i.parts.length} partes`) : null),
       h('div', { class: 'ri-s' },
         h('span', { class: 'dot st-' + i.status }), statusLabel(i.status, i.type),
         ' · ', i.eps ? `${i.prog}/${i.eps}` : `${i.prog}`,

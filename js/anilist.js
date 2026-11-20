@@ -87,6 +87,21 @@ export async function browse({ type = 'ANIME', search = '', sort, season, year, 
 
 const SAME_SERIES = new Set(['SEQUEL', 'PREQUEL', 'PARENT', 'SIDE_STORY', 'SUMMARY', 'ALTERNATIVE']);
 
+/** Para cada id, os ids das outras partes da mesma série (temporadas, filmes, especiais). Máx. 50 por pedido. */
+export async function seriesLinks(ids) {
+  const out = {};
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const data = await gql(`query($ids:[Int]){ Page(page:1,perPage:50){ media(id_in:$ids){
+        id relations{edges{relationType(version:2) node{id}}} } } }`, { ids: chunk }, 60e3);
+    for (const id of chunk) out[id] = [];
+    for (const m of data.Page.media) {
+      out[m.id] = (m.relations?.edges || []).filter((e) => SAME_SERIES.has(e.relationType) && e.node).map((e) => e.node.id);
+    }
+  }
+  return out;
+}
+
 /**
  * Junta temporadas, filmes e especiais da mesma série num só cartão.
  * O cartão é o primeiro anime TV da série (senão o mais antigo) e leva `parts`, com todas as partes por ordem de estreia.

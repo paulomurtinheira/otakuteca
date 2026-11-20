@@ -125,17 +125,20 @@ function quickAdd(it) {
  *  sub: texto por baixo do título (senão mostra formato/ano)
  */
 export function card(it, { lib = false, sub = null, plain = false } = {}) {
+  // Numa série agrupada (só na Lista), `it` junta as temporadas e `it.cur` é a que estás a ver.
+  const group = !!it.cur;
   const k = keyOf(it.type, it.id);
-  const mine = get(k);
-  const src = mine || it;
+  const mine = it.cur || get(k);
+  const src = group ? it : (mine || it);
   const cov = h('div', { class: 'cover' }, coverImg(src));
 
-  if (mine && mine.score > 0) cov.append(h('span', { class: 'chip score' }, '★ ' + mine.score));
+  const score = group ? it.score : mine?.score;
+  if (score > 0) cov.append(h('span', { class: 'chip score' }, '★ ' + score));
   if (it.parts) cov.append(h('span', { class: 'chip parts' }, it.parts.length + ' partes'));
   if (lib) {
-    const nu = unseen(mine);
+    const nu = group ? it.parts.reduce((s, p) => s + unseen(p), 0) : unseen(mine);
     if (nu > 0) cov.append(h('span', { class: 'chip new' }, '+' + nu));
-    if (mine.fav) cov.append(h('span', { class: 'fav' }, icon('heart', 14)));
+    if (group ? it.fav : mine.fav) cov.append(h('span', { class: 'fav' }, icon('heart', 14)));
     if (mine.eps && ['WATCHING', 'PAUSED'].includes(mine.status))
       cov.append(h('div', { class: 'bar' }, h('i', { style: { width: Math.min(100, (mine.prog / mine.eps) * 100) + '%' } })));
     if (mine.status === 'WATCHING' && (!mine.eps || mine.prog < mine.eps)) {
@@ -143,7 +146,7 @@ export function card(it, { lib = false, sub = null, plain = false } = {}) {
         class: 'plus1', title: 'Vi mais um',
         onclick(e) {
           e.stopPropagation();
-          setProgress(k, mine.prog + 1);
+          setProgress(mine.k, mine.prog + 1);
         },
       }, '+1'));
     }
@@ -154,12 +157,13 @@ export function card(it, { lib = false, sub = null, plain = false } = {}) {
   let subtitle = sub;
   if (subtitle == null) {
     if (lib) {
-      subtitle = mine.eps ? `${mine.prog}/${mine.eps}` : `${mine.prog} ${mine.type === 'MANGA' ? 'cap.' : 'ep.'}`;
+      const t = group ? it : mine;
+      subtitle = t.eps ? `${t.prog}/${t.eps}` : `${t.prog} ${mine.type === 'MANGA' ? 'cap.' : 'ep.'}`;
     } else {
       subtitle = [it.fmt && it.fmt.replace('_', ' '), it.year, it.avg ? '★ ' + (it.avg / 10).toFixed(1) : null].filter(Boolean).join(' · ');
     }
   }
-  return h('div', { class: 'card', style: { '--c': src.color || '#7c6cf0' }, onclick: () => openDetail(src, it.parts) },
+  return h('div', { class: 'card', style: { '--c': src.color || '#7c6cf0' }, onclick: () => openDetail(mine && group ? mine : src, it.parts) },
     cov,
     h('div', { class: 'ct' }, titleOf(src)),
     h('div', { class: 'cs' }, subtitle));

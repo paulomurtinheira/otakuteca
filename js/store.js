@@ -6,6 +6,7 @@ import { dayStr, clamp } from './util.js';
 const DK = 'otk_data_v1';   // a tua lista
 const CK = 'otk_cfg_v1';    // definições deste aparelho (inclui o token do GitHub)
 const AK = 'otk_air_v1';    // cache dos próximos episódios (não sincroniza)
+const RK = 'otk_rel_v1';    // cache das séries: que títulos são da mesma série (não sincroniza)
 
 export const STATUSES = ['WATCHING', 'PLANNED', 'COMPLETED', 'PAUSED', 'DROPPED'];
 const LABELS = {
@@ -39,6 +40,7 @@ export const state = {
     ...load(CK, {}),
   },
   air: load(AK, {}),
+  rel: load(RK, {}),
 };
 
 // ---------- eventos ----------
@@ -94,6 +96,13 @@ export function setCfg(p) {
 export function setAir(map) {
   state.air = map;
   save(AK, map);
+  emit('data');
+}
+
+/** Guarda quais os títulos da mesma série de cada título (cache deste aparelho, não sincroniza). */
+export function setRel(map) {
+  state.rel = map;
+  save(RK, map);
   emit('data');
 }
 
