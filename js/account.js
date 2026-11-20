@@ -7,6 +7,8 @@ import { provider } from './sync.js';
 /** 'account' | 'guest' | 'welcome' */
 export function access() {
   if (provider()) return 'account';
+  // quem já tinha uma lista neste aparelho (de antes de haver contas) continua a vê-la, nunca a escondemos
+  if (Object.keys(state.data.items).length) return 'account';
   return state.cfg.guest ? 'guest' : 'welcome';
 }
 export const hasAccount = () => access() === 'account';

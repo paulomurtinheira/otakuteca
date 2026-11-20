@@ -1,6 +1,6 @@
 // Service worker: deixa a app abrir offline. Rede primeiro (para receberes sempre a versão nova),
 // e se não houver rede usa a cópia guardada. Não guarda imagens nem chamadas à API.
-const V = 'otakuteca-v2';
+const V = 'otakuteca-v3';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(V).then((c) => c.addAll(['./', 'index.html', 'css/style.css', 'js/app.js'])).then(() => self.skipWaiting()));

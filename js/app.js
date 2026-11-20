@@ -110,5 +110,12 @@ refreshAiring(false).then(badge);
 setInterval(() => refreshAiring(false).then(badge), 30 * 60e3);
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW:', e));
+  // Se já havia uma versão instalada e chega uma nova, recarrega uma vez: evita ficar com ficheiros de duas versões misturados
+  // (é isso que faz os botões deixarem de responder logo a seguir a uma atualização).
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloaded) { reloaded = true; location.reload(); }
+  });
+  navigator.serviceWorker.register('sw.js').then((reg) => reg.update()).catch((e) => console.warn('SW:', e));
 }
