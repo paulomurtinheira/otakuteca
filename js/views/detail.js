@@ -7,7 +7,7 @@ import {
 } from '../store.js';
 import { detail as fetchDetail } from '../anilist.js';
 import { icon, openSheet, toast, coverImg, confirmSheet } from '../ui.js';
-import { list as mySources, buildUrl } from '../sources.js';
+import { list as mySources, buildUrl, isSearch } from '../sources.js';
 import { hasAccount } from '../account.js';
 
 export const MOODS = [
@@ -113,11 +113,14 @@ export function openDetail(base, parts = null) {
         h('a', { class: 'btn small', href: '#/settings', onclick: sh.close }, icon('sliders', 15), ' Configurar os meus sites'));
       return;
     }
-    const open = (url, cls, ...kids) => h('a', { class: cls, href: buildUrl(url, it, ep), target: '_blank', rel: 'noopener noreferrer', referrerPolicy: 'no-referrer' }, ...kids);
+    const open = (url, kind, cls, ...kids) => h('a', { class: cls, href: buildUrl(url, it, ep, kind), target: '_blank', rel: 'noopener noreferrer', referrerPolicy: 'no-referrer' }, ...kids);
     watchBox.append(h('div', { class: 'chips' }, mySites.map((s) =>
       h('span', { class: 'src-pair' },
-        open(s.url, 'btn small', icon('play', 15), ' ' + s.name),
-        s.url2 ? open(s.url2, 'btn small ghost', 'anime') : null))));
+        open(s.url, 'ep', 'btn small', icon(isSearch(s.url) ? 'search' : 'play', 15), ' ' + s.name),
+        s.url2 ? open(s.url2, 'anime', 'btn small ghost', 'anime') : null))));
+    if (mySites.some((s) => isSearch(s.url))) {
+      watchBox.append(h('p', { class: 'muted small' }, 'A lupa quer dizer que o site não deixa montar o link do episódio: abre uma pesquisa dentro dele, e o resultado costuma ser o episódio.'));
+    }
   }
 
   // ---------- estado, progresso, nota ----------

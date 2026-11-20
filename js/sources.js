@@ -63,8 +63,30 @@ export function removeSource(id) {
   setCfg({ sources: list().filter((s) => s.id !== id) });
 }
 
-/** Constrói o endereço final para um título e um episódio. */
-export function buildUrl(tpl, item, ep) {
+/** Um endereço sem etiquetas (ex.: um link copiado do site) não dá para montar sozinho: a app pesquisa dentro do site. */
+export const isSearch = (tpl) => !/\{[a-z]+\}/.test(tpl || '');
+
+/** "https://www.exemplo.com/..." -> "exemplo.com" */
+export function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
+}
+
+/** Nome sugerido a partir do endereço: "https://www.meu-site.com/x" -> "Meu-site". */
+export function nameFromUrl(url) {
+  const h = hostOf(url).split('.')[0];
+  return h ? h[0].toUpperCase() + h.slice(1) : '';
+}
+
+/**
+ * Constrói o endereço final para um título e um episódio.
+ * `kind` 'ep' = página do episódio, 'anime' = página do anime (só muda a pesquisa dentro do site).
+ */
+export function buildUrl(tpl, item, ep, kind = 'ep') {
+  if (isSearch(tpl)) {
+    const host = hostOf(tpl);
+    const q = `site:${host} ${titleOf(item)}` + (kind === 'ep' && item.type !== 'MANGA' ? ` episódio ${ep}` : '');
+    return 'https://www.google.com/search?q=' + encodeURIComponent(q);
+  }
   return tpl.replace(/\{([a-z]+)\}/g, (_, t) => {
     if (t === 'titulo') return encodeURIComponent(titleOf(item));
     if (t === 'slug') return slugify(item.title || item.en);

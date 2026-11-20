@@ -6,7 +6,7 @@ import { sync, syncNow, testConnection, onSyncChange, configured, provider } fro
 import { signIn, signOut, clientId } from '../gdrive.js';
 import { importAniList, importMal } from '../importers.js';
 import { icon, toast, confirmSheet } from '../ui.js';
-import { list as mySources, add as addSource, removeSource } from '../sources.js';
+import { list as mySources, add as addSource, removeSource, check, buildUrl, isSearch, hostOf, nameFromUrl } from '../sources.js';
 
 const ago = (t) => {
   if (!t) return 'nunca';
@@ -200,38 +200,59 @@ export function mount(root) {
   // --- os meus sites ---
   const srcList = h('div', { class: 'src-list' });
   const srcMsg = h('div', { class: 'msg' });
-  const srcName = h('input', { class: 'field', placeholder: 'O nome que queres ver no botão', maxLength: 30, autocomplete: 'off' });
-  const srcUrl = h('input', { class: 'field', type: 'url', placeholder: 'https://…/{slug}/episodio-{ep}', autocapitalize: 'off', autocomplete: 'off', spellcheck: false });
+  let nameAuto = true; // enquanto não escreveres o nome, a app sugere um a partir do endereço
+  const srcName = h('input', { class: 'field', placeholder: 'O nome que queres ver no botão', maxLength: 30, autocomplete: 'off', oninput() { nameAuto = !srcName.value; } });
+  const srcHint = h('p', { class: 'muted small' });
+  const paintHint = () => {
+    const v = srcUrl.value.trim();
+    if (nameAuto) srcName.value = nameFromUrl(v);
+    if (!v) { srcHint.textContent = 'Cola um link do site. Qualquer página serve, até a inicial.'; return; }
+    srcHint.textContent = isSearch(v)
+      ? `Sem etiquetas: o botão vai pesquisar o título e o episódio dentro de ${hostOf(v) || 'este site'}. É o mais prático e funciona em quase todos os sites.`
+      : 'Com etiquetas: o botão abre diretamente o endereço montado.';
+  };
+  const srcUrl = h('input', { class: 'field', type: 'url', placeholder: 'https://… (cola aqui um link do site)', autocapitalize: 'off', autocomplete: 'off', spellcheck: false, oninput: paintHint });
   const srcUrl2 = h('input', { class: 'field', type: 'url', placeholder: 'https://…/{slug}  ou  https://…/search?q={titulo}', autocapitalize: 'off', autocomplete: 'off', spellcheck: false });
   const sayS = (t, cls = '') => { srcMsg.className = 'msg ' + cls; srcMsg.textContent = t; };
+  const SAMPLE = { type: 'ANIME', title: 'Sousou no Frieren', en: "Frieren: Beyond Journey's End", year: 2023 };
+  const testSource = () => {
+    const err = check(srcName.value || 'teste', srcUrl.value, srcUrl2.value);
+    if (err) { sayS(err, 'bad'); return; }
+    window.open(buildUrl(srcUrl.value.trim(), SAMPLE, 1), '_blank', 'noopener,noreferrer');
+    sayS('Abri o link para "Sousou no Frieren", episódio 1. Se for o certo, carrega em Adicionar.', '');
+  };
   const paintSources = () => {
     clear(srcList);
     const mine = mySources();
     if (!mine.length) srcList.append(h('p', { class: 'muted small' }, 'Ainda não tens nenhum site.'));
     for (const s of mine) {
       srcList.append(h('div', { class: 'src-row' },
-        h('div', { class: 'src-main' }, h('b', null, s.name), h('small', { class: 'muted' }, s.url), s.url2 ? h('small', { class: 'muted' }, 'anime: ' + s.url2) : null),
+        h('div', { class: 'src-main' }, h('b', null, s.name), h('small', { class: 'muted' }, isSearch(s.url) ? '🔎 pesquisa em ' + hostOf(s.url) : s.url), s.url2 ? h('small', { class: 'muted' }, 'anime: ' + s.url2) : null),
         h('button', { class: 'icon-btn', 'aria-label': 'Remover ' + s.name, onclick() { removeSource(s.id); paintSources(); } }, icon('trash', 16))));
     }
   };
   const submitSource = () => {
     const err = addSource(srcName.value, srcUrl.value, srcUrl2.value);
     if (err) { sayS(err, 'bad'); return; }
-    srcName.value = ''; srcUrl.value = ''; srcUrl2.value = '';
+    srcName.value = ''; srcUrl.value = ''; srcUrl2.value = ''; nameAuto = true; paintHint();
     sayS('Adicionado ✔', 'good');
     paintSources();
   };
   const sites = h('div', { class: 'panel' }, h('h3', null, '🔗 Os meus sites'),
     h('p', { class: 'muted small' }, 'A app não traz nenhum site. Acrescenta tu os que quiseres e em cada anime aparece um botão por site, já com o título e o próximo episódio. Fica guardado só neste aparelho.'),
     srcList,
+    h('label', { class: 'lbl' }, 'Link do site', srcUrl),
+    srcHint,
     h('label', { class: 'lbl' }, 'Nome do site', srcName),
-    h('label', { class: 'lbl' }, 'Endereço do episódio', srcUrl),
-    h('label', { class: 'lbl' }, 'Página do anime (opcional)', srcUrl2),
-    h('p', { class: 'muted small' }, 'Se o episódio der erro, o botão "anime" ao lado leva-te a esta página.'),
-    h('button', { class: 'btn primary', onclick: submitSource }, 'Adicionar'),
+    h('details', { class: 'how' }, h('summary', null, 'Opções avançadas (página do anime)'),
+      h('label', { class: 'lbl' }, 'Página do anime (opcional)', srcUrl2),
+      h('p', { class: 'muted small' }, 'Se o episódio der erro, o botão "anime" ao lado leva-te a esta página.')),
+    h('div', { class: 'row gap wrap' },
+      h('button', { class: 'btn primary', onclick: submitSource }, 'Adicionar'),
+      h('button', { class: 'btn', onclick: testSource }, 'Testar')),
     srcMsg,
-    h('details', { class: 'how' }, h('summary', null, 'Como escrever o endereço'),
-      h('p', { class: 'small' }, 'Copia o endereço de um episódio do site e troca as partes variáveis por estas etiquetas:'),
+    h('details', { class: 'how' }, h('summary', null, 'Como escrever o endereço (avançado)'),
+      h('p', { class: 'small' }, 'Se o site tem links previsíveis, copia o endereço de um episódio e troca as partes variáveis por estas etiquetas. Se os links têm códigos que não dá para adivinhar (como ?view=68747470…), deixa o link sem etiquetas e a app pesquisa dentro do site.'),
       h('ul', null,
         h('li', null, h('code', null, '{titulo}'), ' o título, pronto para pesquisa'),
         h('li', null, h('code', null, '{slug}'), ' o título em minúsculas com hífens (sousou-no-frieren)'),
@@ -239,6 +260,7 @@ export function mount(root) {
         h('li', null, h('code', null, '{ano}'), ' o ano de estreia')),
       h('p', { class: 'small muted' }, 'Exemplo: https://exemplo.com/anime/{slug}/episodio-{ep}. Se não souberes o formato do site, usa a pesquisa: https://exemplo.com/search?q={titulo}.')));
   paintSources();
+  paintHint();
 
   // --- aparência ---
   const prefs = h('div', { class: 'panel' }, h('h3', null, '🎨 Preferências'),
