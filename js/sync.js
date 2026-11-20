@@ -1,7 +1,9 @@
-// Sincronização com um repositório privado do GitHub: a lista fica num ficheiro JSON
-// e cada alteração é um commit (tens histórico completo e podes voltar atrás).
+// Sincronização: a lista fica num ficheiro JSON, ou num repositório privado do GitHub
+// (cada alteração é um commit, com histórico completo) ou na Google Drive de quem entrou
+// com o Gmail. Em ambos os casos a app junta a cópia remota com a local antes de escrever.
 
 import { state, subscribe, replaceData, setCfg, serialize, merge, normalize } from './store.js';
+import * as gd from './gdrive.js';
 
 export const sync = { status: 'off', msg: '', at: 0 };
 const listeners = new Set();
@@ -12,7 +14,14 @@ function set(status, msg = '') {
   listeners.forEach((f) => f(sync));
 }
 
-export const configured = () => !!(state.cfg.repo && state.cfg.token);
+/** Qual o sítio onde a lista está a ser guardada: 'google', 'github' ou '' (só neste aparelho). */
+export function provider() {
+  const c = state.cfg;
+  if (c.provider === 'google' && c.gEmail) return 'google';
+  if (c.repo && c.token) return 'github';
+  return '';
+}
+export const configured = () => provider() !== '';
 
 function api(path, opts = {}, cfg = state.cfg) {
   return fetch('https://api.github.com' + path, {
@@ -86,26 +95,35 @@ async function put(text, sha) {
   return 'ok';
 }
 
-let busy = false, again = false, timer = 0;
+let busy = false, again = false, timer = 0, armed = false;
+
+/** Sem login válido a Google só abre a janela de renovação a partir de um toque: espera pelo próximo. */
+function armRenew() {
+  if (armed) return;
+  armed = true;
+  document.addEventListener('pointerdown', () => { armed = false; syncNow(); }, { once: true, capture: true });
+}
 
 export async function syncNow() {
   if (!configured()) return;
   if (busy) { again = true; return; }
   busy = true;
   set('syncing');
+  const be = provider() === 'google' ? gd : { pull, put };
   try {
     for (let i = 0; i < 3; i++) {
-      const { data: remote, sha } = await pull();
+      const { data: remote, sha } = await be.pull();
       const local = state.data;
       const merged = remote ? merge(local, remote) : local;
       const text = serialize(merged);
       if (serialize(local) !== text) replaceData(merged);   // veio coisa nova de outro aparelho
       if (remote && serialize(remote) === text) { set('ok'); return; }
-      if ((await put(text, sha)) === 'ok') { set('ok'); return; }
+      if ((await be.put(text, sha)) === 'ok') { set('ok'); return; }
     }
     throw new Error('Conflitos repetidos. Tenta outra vez daqui a pouco.');
   } catch (e) {
-    set(navigator.onLine ? 'error' : 'offline', navigator.onLine ? e.message : 'Sem ligação. Fica guardado neste aparelho e sincroniza quando voltares online.');
+    if (e.login) { set('login', e.message); armRenew(); }
+    else set(navigator.onLine ? 'error' : 'offline', navigator.onLine ? e.message : 'Sem ligação. Fica guardado neste aparelho e sincroniza quando voltares online.');
   } finally {
     busy = false;
     if (again) { again = false; schedule(1500); }
@@ -140,5 +158,9 @@ export function initSync() {
   };
   document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
   window.addEventListener('online', () => syncNow());
-  if (configured()) { set('idle'); syncNow(); }
+  if (configured()) {
+    set('idle');
+    if (provider() === 'google') gd.loadGis().catch(() => {}); // já carregado quando o utilizador tocar
+    syncNow();
+  }
 }

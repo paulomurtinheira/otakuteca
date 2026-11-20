@@ -2,7 +2,8 @@
 
 import { h, clear, dayStr, download } from '../util.js';
 import { state, setCfg, serialize, mergeIn, normalize, wipeLocal, all } from '../store.js';
-import { sync, syncNow, testConnection, onSyncChange, configured } from '../sync.js';
+import { sync, syncNow, testConnection, onSyncChange, configured, provider } from '../sync.js';
+import { signIn, signOut, clientId } from '../gdrive.js';
 import { importAniList, importMal } from '../importers.js';
 import { icon, toast, confirmSheet } from '../ui.js';
 import { list as mySources, add as addSource, removeSource } from '../sources.js';
@@ -24,7 +25,7 @@ export function syncChip() {
     el.className = 'sync-chip ' + s;
     el.title = sync.msg || '';
     el.replaceChildren(icon('cloud', 15), ({
-      off: 'Só neste aparelho', idle: 'GitHub ligado', syncing: 'A sincronizar…', ok: 'Sincronizado', error: 'Erro de sync', offline: 'Offline',
+      off: 'Só neste aparelho', idle: provider() === 'google' ? 'Google ligado' : 'GitHub ligado', syncing: 'A sincronizar…', ok: 'Sincronizado', error: 'Erro de sync', offline: 'Offline', login: 'Toca para renovar login',
     })[s]);
   };
   paint();
@@ -48,6 +49,55 @@ export function mountMore(root) {
 export function mount(root) {
   const body = h('div', { class: 'settings' });
   root.append(h('div', { class: 'head' }, h('h1', null, 'Definições')), body);
+
+  // --- Entrar com Google ---
+  const gBox = h('div', { class: 'panel' });
+  const gMsg = h('div', { class: 'msg' });
+  const gChip = syncChip();
+  const sayG = (t, cls = '') => { gMsg.className = 'msg ' + cls; gMsg.textContent = t; };
+  function paintGoogle() {
+    clear(gBox);
+    const on = provider() === 'google';
+    gBox.append(h('div', { class: 'panel-h' }, h('h3', null, '👤 Entrar com Google'), gChip),
+      h('p', { class: 'muted small' }, 'Entra com o teu Gmail e a lista fica guardada numa pasta escondida da tua Google Drive, que só esta app vê. Sem criar contas, sem tokens, e funciona igual no PC e no iPhone.'));
+    if (on) {
+      gBox.append(h('p', null, 'Ligado como ', h('b', null, state.cfg.gEmail)),
+        h('div', { class: 'row gap wrap' },
+          h('button', { class: 'btn', async onclick() { await syncNow(); sayG('Sincronizado.', 'good'); } }, icon('refresh', 16), ' Sincronizar agora'),
+          h('button', { class: 'btn danger-ghost', onclick() { signOut(); paintGoogle(); paintStatus(); sayG('Sessão terminada. A lista continua neste aparelho.'); } }, 'Terminar sessão')),
+        h('p', { class: 'muted small' }, 'A Google pede a renovação do login de hora a hora. Quando aparecer "Toca para renovar login", basta tocares em qualquer sítio da app.'));
+    } else if (!clientId()) {
+      const idIn = h('input', { class: 'field', placeholder: '123456789-abc….apps.googleusercontent.com', autocapitalize: 'off', autocomplete: 'off', spellcheck: false });
+      gBox.append(h('p', { class: 'msg warn' }, 'Falta configurar o login da Google (é feito uma vez por quem publica a app).'),
+        h('label', { class: 'lbl' }, 'ID de cliente da Google', idIn),
+        h('button', { class: 'btn', onclick() { const v = idIn.value.trim(); if (!/\.apps\.googleusercontent\.com$/.test(v)) { sayG('Esse ID não parece válido. Termina em .apps.googleusercontent.com', 'bad'); return; } setCfg({ gclient: v }); paintGoogle(); } }, 'Guardar'),
+        h('details', { class: 'how' }, h('summary', null, 'Como obter o ID (5 minutos)'),
+          h('ol', null,
+            h('li', null, 'Em ', h('a', { href: 'https://console.cloud.google.com/projectcreate', target: '_blank', rel: 'noopener' }, 'console.cloud.google.com'), ' cria um projeto (qualquer nome).'),
+            h('li', null, 'Em "APIs e serviços → Biblioteca" ativa a ', h('b', null, 'Google Drive API'), '.'),
+            h('li', null, 'Em "Ecrã de consentimento OAuth" escolhe "Externo", preenche o nome da app e o teu email, e no fim carrega em ', h('b', null, 'Publicar app'), ' (o acesso pedido é só a pasta da própria app, não precisa de verificação).'),
+            h('li', null, 'Em "Credenciais → Criar credenciais → ID de cliente OAuth" escolhe "Aplicação Web" e em "Origens JavaScript autorizadas" põe o endereço desta app (', h('code', null, location.origin), ').'),
+            h('li', null, 'Copia o ID que acaba em .apps.googleusercontent.com e cola acima.'))));
+    } else {
+      gBox.append(h('button', {
+        class: 'btn primary',
+        async onclick(e) {
+          e.target.disabled = true;
+          sayG('A abrir o login da Google…');
+          try {
+            const email = await signIn();
+            sayG('Ligado como ' + email + ' ✔', 'good');
+            paintGoogle(); paintStatus();
+            syncNow().then(() => { paintStatus(); toast('Sincronizado'); });
+          } catch (err) { sayG(err.message, 'bad'); }
+          e.target.disabled = false;
+        },
+      }, 'Entrar com Google'));
+    }
+    gBox.append(gMsg);
+  }
+  onSyncChange(() => { if (gBox.isConnected) paintGoogle(); });
+  paintGoogle();
 
   // --- GitHub ---
   const f = {
@@ -80,7 +130,8 @@ export function mount(root) {
           const r = await testConnection(cfg);
           e.target.disabled = false;
           if (!r.ok) { msg.className = 'msg bad'; msg.textContent = r.msg; return; }
-          setCfg(cfg);
+          setCfg({ ...cfg, provider: 'github' });
+          paintGoogle();
           msg.className = 'msg ' + (r.isPrivate ? 'good' : 'warn');
           msg.textContent = r.isPrivate ? `Ligado a ${r.name} ✔` : `⚠️ ${r.name} é PÚBLICO: qualquer pessoa pode ver a tua lista. Cria um repositório privado.`;
           syncNow().then(() => { paintStatus(); toast('Sincronizado'); });
@@ -201,7 +252,7 @@ export function mount(root) {
     h('p', { class: 'muted small' }, 'Apaga a lista guardada neste aparelho. Se o GitHub estiver ligado, a lista volta no próximo sync (e isso é uma boa forma de a recuperar).'),
     h('button', { class: 'btn danger-ghost', onclick() { confirmSheet({ title: 'Apagar a lista deste aparelho?', text: `${all().length} títulos serão removidos daqui.`, ok: 'Apagar', danger: true, onOk() { wipeLocal(); toast('Lista local apagada'); } }); } }, icon('trash', 16), ' Apagar lista local'));
 
-  body.append(connect, sites, io, prefs, ios, danger, h('p', { class: 'muted small center' }, 'Otakuteca · dados dos títulos: AniList'));
+  body.append(gBox, connect, sites, io, prefs, ios, danger, h('p', { class: 'muted small center' }, 'Otakuteca · dados dos títulos: AniList'));
   paintStatus();
   return {};
 }

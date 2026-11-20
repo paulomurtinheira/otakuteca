@@ -21,6 +21,19 @@ A app é só ficheiros estáticos. O mais simples é o GitHub Pages:
 2. Em *Settings → Pages* escolhe *Deploy from a branch*, branch `main`, pasta `/ (root)`.
 3. Passado um minuto a app está em `https://O-TEU-NOME.github.io/otakuteca/`.
 
+## Entrar com Google (opcional)
+
+Em vez do GitHub, cada pessoa pode entrar com o seu Gmail: a lista fica num ficheiro escondido na Google Drive dela (pasta da app, que só a app vê). Não há servidor nem contas nossas.
+
+Quem publica a app configura isto **uma vez**:
+
+1. Em <https://console.cloud.google.com/projectcreate> cria um projeto e ativa a **Google Drive API**.
+2. "Ecrã de consentimento OAuth" → Externo → preenche o nome e o email → **Publicar app**. O acesso pedido (`drive.appdata`, email e perfil) não é sensível, por isso não precisa de verificação da Google.
+3. "Credenciais" → "ID de cliente OAuth" → Aplicação Web → em "Origens JavaScript autorizadas" põe o endereço da app (ex.: `https://O-TEU-NOME.github.io`) e, para testar, `http://localhost:5180`.
+4. Copia o ID (acaba em `.apps.googleusercontent.com`) para `GOOGLE_CLIENT_ID` em `js/config.js`. Com isso preenchido, quem usa a app só carrega em "Entrar com Google". O ID é público por natureza, pode ficar no repositório.
+
+A Google só dá login por 1 hora a páginas sem servidor: quando expira, a app mostra "Toca para renovar login" e um toque em qualquer sítio renova.
+
 ## Guardar a lista no GitHub
 
 Os dados ficam num **segundo repositório, privado**, separado do código.
