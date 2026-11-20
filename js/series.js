@@ -1,8 +1,8 @@
 // Séries: juntar na lista as temporadas, filmes e especiais da mesma série (ex.: Naruto + Naruto Shippuden).
 // Cada temporada continua a ter o seu estado, progresso e nota; só a vista da Lista as mostra como um só cartão.
 
-import { state, all, setRel } from './store.js';
-import { seriesLinks } from './anilist.js';
+import { state, all, setRel, addMany } from './store.js';
+import { seriesLinks, franchise } from './anilist.js';
 
 let busy = false, failedAt = 0;
 
@@ -22,6 +22,22 @@ export async function ensureRelations() {
     return false;
   } finally {
     busy = false;
+  }
+}
+
+/**
+ * Ao adicionar um anime, acrescenta também as outras temporadas e filmes da série (como "Planeado"),
+ * para depois marcares o que já viste. Devolve as chaves acrescentadas (vazio se falhar ou não houver mais).
+ */
+export async function addRestOfSeries(media) {
+  if (media.type !== 'ANIME') return [];
+  try {
+    const f = await franchise(media.id);
+    setRel({ ...state.rel, ...f.rel });
+    return addMany(f.items);
+  } catch (e) {
+    console.warn('Não consegui buscar o resto da série:', e.message);
+    return [];
   }
 }
 

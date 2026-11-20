@@ -152,6 +152,34 @@ export function addMedia(media, status = 'PLANNED') {
   return it;
 }
 
+/** Acrescenta de uma vez (uma só gravação) os títulos que ainda não estão na lista, como "Planeado". Devolve as chaves novas. */
+export function addMany(medias, status = 'PLANNED') {
+  const added = [];
+  for (const m of medias) {
+    const k = keyOf(m.type, m.id);
+    if (state.data.items[k]) continue;
+    state.data.items[k] = buildItem(m, status);
+    delete state.data.deleted[k];
+    added.push(k);
+  }
+  if (added.length) commit();
+  return added;
+}
+
+/** "Já vi isto": concluído com todos os episódios, sem inventar atividade para hoje (o calendário e a retrospetiva ficam como estavam). */
+export function markSeen(k) {
+  const it = get(k);
+  if (!it || it.status === 'COMPLETED' && (!it.eps || it.prog >= it.eps)) return;
+  patch(k, { status: 'COMPLETED', prog: it.eps || it.prog });
+}
+
+/** "Ainda não vi": volta a Planeado e a zero (o histórico de atividade fica). */
+export function markUnseen(k) {
+  const it = get(k);
+  if (!it || (it.status === 'PLANNED' && !it.prog)) return;
+  patch(k, { status: 'PLANNED', prog: 0, end: null });
+}
+
 export function patch(k, p) {
   const it = get(k);
   if (!it) return;

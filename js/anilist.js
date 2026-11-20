@@ -87,6 +87,34 @@ export async function browse({ type = 'ANIME', search = '', sort, season, year, 
 
 const SAME_SERIES = new Set(['SEQUEL', 'PREQUEL', 'PARENT', 'SIDE_STORY', 'SUMMARY', 'ALTERNATIVE']);
 
+const FRANCHISE_LINKS = new Set(['SEQUEL', 'PREQUEL', 'PARENT', 'SIDE_STORY']);
+const FRANCHISE_FORMATS = new Set(['TV', 'MOVIE', 'ONA']); // temporadas e filmes (sem OVAs, especiais, resumos nem músicas)
+
+/**
+ * A série toda de um anime: segue as ligações (sequela, prequela, história paralela) até não haver mais.
+ * Devolve as temporadas e filmes (menos o próprio, que já está) e as ligações de cada título.
+ */
+export async function franchise(id, max = 40) {
+  const seen = new Set([id]);
+  const media = new Map();
+  const rel = {};
+  let frontier = [id];
+  for (let round = 0; round < 8 && frontier.length && seen.size <= max; round++) {
+    const data = await gql(`${M} query($ids:[Int]){ Page(page:1,perPage:50){ media(id_in:$ids,type:ANIME){
+        ...M relations{edges{relationType(version:2) node{id}}} } } }`, { ids: frontier }, 30 * 60e3);
+    const next = [];
+    for (const m of data.Page.media) {
+      media.set(m.id, m);
+      const links = (m.relations?.edges || []).filter((e) => e.node && FRANCHISE_LINKS.has(e.relationType)).map((e) => e.node.id);
+      rel[m.id] = links;
+      for (const n of links) if (!seen.has(n)) { seen.add(n); next.push(n); }
+    }
+    frontier = next.slice(0, 50);
+  }
+  const items = [...media.values()].filter((m) => m.id !== id && FRANCHISE_FORMATS.has(m.format)).map(toItem);
+  return { items, rel };
+}
+
 /** Para cada id, os ids das outras partes da mesma série (temporadas, filmes, especiais). Máx. 50 por pedido. */
 export async function seriesLinks(ids) {
   const out = {};

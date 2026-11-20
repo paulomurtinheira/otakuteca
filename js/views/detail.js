@@ -2,13 +2,14 @@
 
 import { h, clear, debounce, fmtCountdown, stripHtml, dayStr } from '../util.js';
 import {
-  state, get, keyOf, addMedia, patch, remove, restore, setStatus, setProgress,
+  state, all, get, keyOf, addMedia, patch, remove, restore, setStatus, setProgress, markSeen, markUnseen,
   STATUSES, statusLabel, titleOf, airedCount,
 } from '../store.js';
 import { detail as fetchDetail } from '../anilist.js';
 import { icon, openSheet, toast, coverImg, confirmSheet } from '../ui.js';
 import { list as mySources, buildUrl, isSearch } from '../sources.js';
 import { hasAccount } from '../account.js';
+import { addRestOfSeries, groupLibrary } from '../series.js';
 
 export const MOODS = [
   ['cry', '😭', 'Chorei'], ['hype', '🔥', 'Hype'], ['mind', '🤯', 'Mind-blown'], ['lol', '😂', 'Muito engraçado'],
@@ -39,7 +40,7 @@ export function openDetail(base, parts = null) {
   const stack = [];
   let cur = base, extra = null, ticket = 0;
   let root = sh.body;
-  let trackBox, watchBox, extraBox, dateStart, dateEnd;
+  let trackBox, watchBox, extraBox, seriesHost, dateStart, dateEnd;
 
   const keyNow = () => keyOf(cur.type, cur.id);
 
@@ -92,7 +93,9 @@ export function openDetail(base, parts = null) {
     trackBox = h('div', { class: 'box' });
     watchBox = h('div', { class: 'box' });
     extraBox = h('div', { class: 'extra' });
-    root.append(hero, h('div', { class: 'sheet-content' }, trackBox, seriesBox(), watchBox, mine ? personal(mine) : null, extraBox));
+    seriesHost = h('div');
+    root.append(hero, h('div', { class: 'sheet-content' }, trackBox, seriesHost, watchBox, mine ? personal(mine) : null, extraBox));
+    paintSeries();
     renderTrack();
     renderExtra();
   }
@@ -146,6 +149,11 @@ export function openDetail(base, parts = null) {
             if (s !== 'PLANNED') setStatus(k, s);
             toast('Adicionado: ' + statusLabel(s, cur.type));
             render();
+            // e as outras temporadas e filmes da série, para depois marcares o que já viste
+            addRestOfSeries(cur).then((keys) => {
+              if (keys.length) toast(`+${keys.length} temporadas e filmes da série`, { undo() { keys.forEach(remove); paintSeries(); } });
+              paintSeries();
+            });
           } else {
             setStatus(k, s);
             renderTrack();
@@ -285,6 +293,40 @@ export function openDetail(base, parts = null) {
         h('div', { class: 'mini-c', style: { '--c': item.color || '#6d5bd0' } }, coverImg(item), get(keyOf(item.type, item.id)) ? h('span', { class: 'mini-tick' }, icon('check', 12)) : null),
         h('div', { class: 'mini-t' }, titleOf(item)),
         label ? h('div', { class: 'mini-l' }, label) : null)))) : null;
+
+  // as outras partes da série que tens na lista (se não tiveres, as que vieram da pesquisa)
+  function paintSeries() {
+    if (!seriesHost) return;
+    clear(seriesHost);
+    let mineParts = null;
+    if (cur.type === 'ANIME' && get(keyNow())) {
+      const g = groupLibrary(all().filter((i) => i.type === 'ANIME')).find((e) => e.parts && e.parts.some((p) => p.id === cur.id));
+      mineParts = g ? g.parts : null;
+    }
+    const box = mineParts ? seriesManager(mineParts) : seriesBox();
+    if (box) seriesHost.append(box);
+  }
+
+  // marcar o que já viste: tudo de uma vez, ou temporada a temporada
+  function seriesManager(parts) {
+    const items = parts.map((p) => get(p.k) || p);
+    const seen = items.filter((p) => p.status === 'COMPLETED').length;
+    const act = (fn) => { fn(); paintSeries(); renderTrack(); syncDates(); };
+    return h('div', { class: 'box' },
+      h('h4', null, `A tua série · ${items.length} partes · ${seen} vistas`),
+      h('div', { class: 'row gap wrap' },
+        h('button', { class: 'btn small', onclick: () => act(() => items.forEach((p) => markSeen(p.k))) }, icon('check', 15), ' Marcar tudo como visto'),
+        h('button', { class: 'btn small ghost', onclick: () => act(() => items.forEach((p) => markUnseen(p.k))) }, 'Nenhuma vista')),
+      h('div', { class: 'parts' }, items.map((p, idx) =>
+        h('div', { class: 'part-row' + (p.id === cur.id ? ' now' : '') },
+          h('button', { class: 'pr-main', onclick() { if (p.id !== cur.id) show(p); } },
+            h('div', { class: 'pr-t' }, titleOf(p)),
+            h('div', { class: 'pr-m' }, [p.fmt && p.fmt.replace('_', ' '), p.year, p.eps ? `${p.prog}/${p.eps} ep.` : null, statusLabel(p.status, p.type)].filter(Boolean).join(' · '))),
+          h('div', { class: 'pr-btns' },
+            h('button', { class: 'btn small ' + (p.status === 'COMPLETED' ? 'primary' : 'ghost'), title: p.status === 'COMPLETED' ? 'Marcar como por ver' : 'Marcar como vista', 'aria-label': 'Vista', onclick: () => act(() => (p.status === 'COMPLETED' ? markUnseen(p.k) : markSeen(p.k))) }, icon('check', 15)),
+            idx > 0 ? h('button', { class: 'btn small ghost', title: 'Marca esta e todas as anteriores como vistas', onclick: () => act(() => items.slice(0, idx + 1).forEach((x) => markSeen(x.k))) }, 'até aqui') : null)))),
+      h('p', { class: 'muted small' }, 'Toca no nome para abrir essa temporada e marcar os episódios.'));
+  }
 
   // as outras temporadas, filmes e especiais (só quando se chega a partir da pesquisa)
   function seriesBox() {

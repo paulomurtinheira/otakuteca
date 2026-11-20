@@ -3,6 +3,7 @@
 import { h, $ } from './util.js';
 import { get, keyOf, titleOf, addMedia, remove, setProgress, unseen, statusLabel, restore } from './store.js';
 import { openDetail } from './views/detail.js';
+import { addRestOfSeries } from './series.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const P = {
@@ -111,6 +112,8 @@ function quickAdd(it) {
           addMedia(it, 'PLANNED');
           toast('Adicionado a Planeado', { undo() { remove(k); paint(); } });
           paint();
+          // e as outras temporadas e filmes da série, para depois marcares o que já viste
+          addRestOfSeries(it).then((keys) => { if (keys.length) toast(`+${keys.length} temporadas e filmes da série`, { undo() { keys.forEach(remove); } }); });
         },
       }, icon('plus', 16)));
     }
