@@ -252,7 +252,7 @@ export function mount(root) {
     h('p', { class: 'muted small' }, 'Apaga a lista guardada neste aparelho. Se o GitHub estiver ligado, a lista volta no próximo sync (e isso é uma boa forma de a recuperar).'),
     h('button', { class: 'btn danger-ghost', onclick() { confirmSheet({ title: 'Apagar a lista deste aparelho?', text: `${all().length} títulos serão removidos daqui.`, ok: 'Apagar', danger: true, onOk() { wipeLocal(); toast('Lista local apagada'); } }); } }, icon('trash', 16), ' Apagar lista local'));
 
-  body.append(gBox, connect, sites, io, prefs, ios, danger, h('p', { class: 'muted small center' }, 'Otakuteca · dados dos títulos: AniList'));
+  body.append(gBox, connect, sites, io, prefs, ios, danger, h('p', { class: 'muted small center' }, 'Otakuteca · dados dos títulos: AniList · ', h('a', { href: 'privacidade.html', target: '_blank', rel: 'noopener' }, 'Privacidade')));
   paintStatus();
   return {};
 }
