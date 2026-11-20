@@ -8,6 +8,7 @@ import {
 import { detail as fetchDetail } from '../anilist.js';
 import { icon, openSheet, toast, coverImg, confirmSheet } from '../ui.js';
 import { list as mySources, buildUrl } from '../sources.js';
+import { hasAccount } from '../account.js';
 
 export const MOODS = [
   ['cry', '😭', 'Chorei'], ['hype', '🔥', 'Hype'], ['mind', '🤯', 'Mind-blown'], ['lol', '😂', 'Muito engraçado'],
@@ -124,6 +125,13 @@ export function openDetail(base) {
     const mine = get(k);
     clear(trackBox);
     renderWatch();
+
+    if (!hasAccount()) {
+      trackBox.append(h('div', { class: 'gate-mini' },
+        h('p', { class: 'small' }, 'Para adicionares isto a uma lista, marcares o progresso e dares nota precisas de conta.'),
+        h('a', { class: 'btn primary small', href: '#/settings', onclick: sh.close }, 'Criar conta / entrar')));
+      return;
+    }
 
     trackBox.append(h('div', { class: 'seg wrap' }, STATUSES.map((s) =>
       h('button', {

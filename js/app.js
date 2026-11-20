@@ -13,6 +13,8 @@ import * as tiers from './views/tiers.js';
 import * as roulette from './views/roulette.js';
 import * as wrapped from './views/wrapped.js';
 import * as settings from './views/settings.js';
+import { mountWelcome, mountGate } from './views/welcome.js';
+import { access, LOCKED } from './account.js';
 
 const ROUTES = {
   library: { label: 'Lista', icon: 'grid', view: library },
@@ -61,25 +63,36 @@ function markActive() {
 }
 
 function route() {
-  const hash = location.hash.replace(/^#\/?/, '') || 'library';
-  name = ROUTES[hash] ? hash : 'library';
+  const mode = access();
+  document.body.classList.toggle('welcome-mode', mode === 'welcome');
+  const hash = location.hash.replace(/^#\/?/, '') || (mode === 'account' ? 'library' : 'discover');
+  name = ROUTES[hash] ? hash : (mode === 'account' ? 'library' : 'discover');
   if (view?.destroy) view.destroy();
   clear(main);
   main.scrollTop = 0;
   window.scrollTo(0, 0);
   const page = h('div', { class: 'page' });
   main.append(page);
-  view = ROUTES[name].view.mount(page) || {};
+  if (mode === 'welcome') {
+    view = mountWelcome(page);
+    document.title = 'Otakuteca';
+  } else if (mode === 'guest' && LOCKED.has(name)) {
+    view = mountGate(page, 'A ' + ROUTES[name].label.toLowerCase());
+    document.title = ROUTES[name].label + ' · Otakuteca';
+  } else {
+    view = ROUTES[name].view.mount(page) || {};
+    document.title = ROUTES[name].label + ' · Otakuteca';
+  }
   markActive();
-  document.title = ROUTES[name].label + ' · Otakuteca';
 }
 
-let raf = 0, lang = state.cfg.titleLang;
+let raf = 0, lang = state.cfg.titleLang, seen = access();
 subscribe((kind) => {
   if (kind === 'cfg') {
     applyTheme();
-    // só refazemos o ecrã se mudou o idioma dos títulos (o resto, como a hora do último sync, não interessa)
-    if (state.cfg.titleLang !== lang) { lang = state.cfg.titleLang; route(); }
+    // só refazemos o ecrã se mudou o idioma dos títulos ou o tipo de acesso (o resto, como a hora do último sync, não interessa)
+    const now = access();
+    if (state.cfg.titleLang !== lang || now !== seen) { lang = state.cfg.titleLang; seen = now; route(); }
     return;
   }
   if (kind !== 'data') return;

@@ -33,6 +33,11 @@ export function syncChip() {
   return el;
 }
 
+// Modo avançado: mostra o que só interessa a quem publica a app (sync por GitHub, ID de cliente da Google).
+// Quem já tinha o GitHub ligado continua a vê-lo.
+const devMode = () => !!state.cfg.dev || provider() === 'github';
+const route = () => window.dispatchEvent(new HashChangeEvent('hashchange'));
+
 // ---------- menu "Mais" ----------
 export function mountMore(root) {
   const tile = (hash, ic, title, text) => h('a', { class: 'tile', href: '#/' + hash }, h('div', { class: 'tile-i' }, icon(ic, 24)), h('div', null, h('b', null, title), h('small', null, text)));
@@ -41,7 +46,7 @@ export function mountMore(root) {
       tile('wrapped', 'sparkle', 'Retrospetiva', 'O teu ano em anime, em stories'),
       tile('roulette', 'dice', 'Roleta', 'Não sabes o que ver? Gira'),
       tile('tiers', 'tiers', 'Tier list', 'Classifica os teus favoritos'),
-      tile('settings', 'sliders', 'Definições', 'Sync, importar, aparência')));
+      tile('settings', 'sliders', 'Definições', 'Conta, importar, aparência')));
   return {};
 }
 
@@ -66,6 +71,8 @@ export function mount(root) {
           h('button', { class: 'btn', async onclick() { await syncNow(); sayG('Sincronizado.', 'good'); } }, icon('refresh', 16), ' Sincronizar agora'),
           h('button', { class: 'btn danger-ghost', onclick() { signOut(); paintGoogle(); paintStatus(); sayG('Sessão terminada. A lista continua neste aparelho.'); } }, 'Terminar sessão')),
         h('p', { class: 'muted small' }, 'A Google pede a renovação do login de hora a hora. Quando aparecer "Toca para renovar login", basta tocares em qualquer sítio da app.'));
+    } else if (!clientId() && !devMode()) {
+      gBox.append(h('p', { class: 'msg warn' }, 'O login com Google ainda não está disponível nesta app.'));
     } else if (!clientId()) {
       const idIn = h('input', { class: 'field', placeholder: '123456789-abc….apps.googleusercontent.com', autocapitalize: 'off', autocomplete: 'off', spellcheck: false });
       gBox.append(h('p', { class: 'msg warn' }, 'Falta configurar o login da Google (é feito uma vez por quem publica a app).'),
@@ -245,14 +252,23 @@ export function mount(root) {
 
   const ios = h('div', { class: 'panel' }, h('h3', null, '📱 Instalar como app'),
     h('p', { class: 'small' }, h('b', null, 'iPhone: '), 'abre esta página no Safari → botão Partilhar → "Adicionar ao ecrã principal". Passa a abrir como uma app a sério, sem barra do browser.'),
-    h('p', { class: 'small muted' }, 'Importante: a app instalada tem o seu próprio armazenamento, separado do Safari. Liga o GitHub (acima) já dentro da app do ecrã principal, e a lista aparece sozinha.'),
+    h('p', { class: 'small muted' }, 'Importante: a app instalada tem o seu próprio armazenamento, separado do Safari. Entra com Google (acima) já dentro da app do ecrã principal, e a lista aparece sozinha.'),
     h('p', { class: 'small' }, h('b', null, 'PC: '), 'no Chrome/Edge, ícone de instalar na barra de endereços.'));
 
   const danger = h('div', { class: 'panel' }, h('h3', null, 'Zona perigosa'),
-    h('p', { class: 'muted small' }, 'Apaga a lista guardada neste aparelho. Se o GitHub estiver ligado, a lista volta no próximo sync (e isso é uma boa forma de a recuperar).'),
+    h('p', { class: 'muted small' }, 'Apaga a lista guardada neste aparelho. Como a tua conta guarda uma cópia na Google Drive, a lista volta no próximo sync.'),
     h('button', { class: 'btn danger-ghost', onclick() { confirmSheet({ title: 'Apagar a lista deste aparelho?', text: `${all().length} títulos serão removidos daqui.`, ok: 'Apagar', danger: true, onOk() { wipeLocal(); toast('Lista local apagada'); } }); } }, icon('trash', 16), ' Apagar lista local'));
 
-  body.append(gBox, connect, sites, io, prefs, ios, danger, h('p', { class: 'muted small center' }, 'Otakuteca · dados dos títulos: AniList · ', h('a', { href: 'privacidade.html', target: '_blank', rel: 'noopener' }, 'Privacidade')));
+  // Tocar 5 vezes no rodapé liga o modo avançado (GitHub, ID de cliente da Google). Os clientes não precisam disto.
+  let taps = 0;
+  const foot = h('p', {
+    class: 'muted small center',
+    onclick() {
+      if (devMode()) return;
+      if (++taps >= 5) { setCfg({ dev: true }); toast('Modo avançado ativado'); route(); }
+    },
+  }, 'Otakuteca · dados dos títulos: AniList · ', h('a', { href: 'privacidade.html', target: '_blank', rel: 'noopener', onclick: (e) => e.stopPropagation() }, 'Privacidade'));
+  body.append(gBox, ...(devMode() ? [connect] : []), sites, io, prefs, ios, danger, foot);
   paintStatus();
   return {};
 }
