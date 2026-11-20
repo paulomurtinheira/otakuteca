@@ -2,7 +2,7 @@
 
 import { h, clear, debounce } from '../util.js';
 import { all, get, keyOf, titleOf } from '../store.js';
-import { browse, GENRES, currentSeason, recommendFrom } from '../anilist.js';
+import { browse, groupSeries, GENRES, currentSeason, recommendFrom } from '../anilist.js';
 import { card, emptyState, seg, skeletons } from '../ui.js';
 
 const st = { mode: 'trending', type: 'ANIME', q: '', genre: '' };
@@ -77,7 +77,9 @@ export function mount(root) {
   function paint() {
     clear(results);
     if (!items.length) { results.append(emptyState('🤷', 'Sem resultados', 'Experimenta outra pesquisa ou género.')); clear(more); return; }
-    results.append(h('div', { class: 'grid' }, items.map((i) => card(i))));
+    // ao pesquisar, as temporadas e filmes da mesma série aparecem num só cartão
+    const shown = st.q ? groupSeries(items) : items;
+    results.append(h('div', { class: 'grid' }, shown.map((i) => card(i))));
     clear(more);
     if (hasMore) more.append(h('button', { class: 'btn', onclick() { page++; load(false); } }, 'Carregar mais'));
   }

@@ -131,6 +131,7 @@ export function card(it, { lib = false, sub = null, plain = false } = {}) {
   const cov = h('div', { class: 'cover' }, coverImg(src));
 
   if (mine && mine.score > 0) cov.append(h('span', { class: 'chip score' }, '★ ' + mine.score));
+  if (it.parts) cov.append(h('span', { class: 'chip parts' }, it.parts.length + ' partes'));
   if (lib) {
     const nu = unseen(mine);
     if (nu > 0) cov.append(h('span', { class: 'chip new' }, '+' + nu));
@@ -158,7 +159,7 @@ export function card(it, { lib = false, sub = null, plain = false } = {}) {
       subtitle = [it.fmt && it.fmt.replace('_', ' '), it.year, it.avg ? '★ ' + (it.avg / 10).toFixed(1) : null].filter(Boolean).join(' · ');
     }
   }
-  return h('div', { class: 'card', style: { '--c': src.color || '#7c6cf0' }, onclick: () => openDetail(src) },
+  return h('div', { class: 'card', style: { '--c': src.color || '#7c6cf0' }, onclick: () => openDetail(src, it.parts) },
     cov,
     h('div', { class: 'ct' }, titleOf(src)),
     h('div', { class: 'cs' }, subtitle));

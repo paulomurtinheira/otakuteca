@@ -68,13 +68,52 @@ export async function browse({ type = 'ANIME', search = '', sort, season, year, 
     query($page:Int,$search:String,$type:MediaType,$sort:[MediaSort],$season:MediaSeason,$year:Int,$genre:String){
       Page(page:$page,perPage:24){
         pageInfo{hasNextPage}
-        media(search:$search,type:$type,sort:$sort,season:$season,seasonYear:$year,genre:$genre,isAdult:false){...M}
+        media(search:$search,type:$type,sort:$sort,season:$season,seasonYear:$year,genre:$genre,isAdult:false){
+          ...M startDate{year month day} relations{edges{relationType(version:2) node{id}}}
+        }
       }
     }`, {
     page, type, search: search || undefined, genre: genre || undefined, season, year,
     sort: [search ? 'SEARCH_MATCH' : (sort || 'TRENDING_DESC')],
   });
-  return { items: data.Page.media.map(toItem), more: data.Page.pageInfo.hasNextPage };
+  // _sk (data de estreia) e _rel (ids relacionados) só servem para agrupar; não são guardados na lista
+  const items = data.Page.media.map((m) => ({
+    ...toItem(m),
+    _sk: m.startDate?.year ? m.startDate.year * 10000 + (m.startDate.month || 0) * 100 + (m.startDate.day || 0) : 99999999,
+    _rel: (m.relations?.edges || []).filter((e) => SAME_SERIES.has(e.relationType)).map((e) => e.node?.id),
+  }));
+  return { items, more: data.Page.pageInfo.hasNextPage };
+}
+
+const SAME_SERIES = new Set(['SEQUEL', 'PREQUEL', 'PARENT', 'SIDE_STORY', 'SUMMARY', 'ALTERNATIVE']);
+
+/**
+ * Junta temporadas, filmes e especiais da mesma série num só cartão.
+ * O cartão é o primeiro anime TV da série (senão o mais antigo) e leva `parts`, com todas as partes por ordem de estreia.
+ */
+export function groupSeries(items) {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const up = new Map(items.map((i) => [i.id, i.id]));
+  const find = (x) => { while (up.get(x) !== x) { up.set(x, up.get(up.get(x))); x = up.get(x); } return x; };
+  for (const i of items) for (const id of i._rel || []) if (byId.has(id)) up.set(find(i.id), find(id));
+
+  const groups = new Map();
+  for (const i of items) {
+    const r = find(i.id);
+    if (!groups.has(r)) groups.set(r, { list: [], done: false });
+    groups.get(r).list.push(i);
+  }
+  const out = [];
+  for (const i of items) {
+    const g = groups.get(find(i.id));
+    if (g.done) continue;
+    g.done = true;
+    if (g.list.length === 1) { out.push(i); continue; }
+    const parts = [...g.list].sort((a, b) => a._sk - b._sk || a.id - b.id);
+    const main = parts.find((p) => p.fmt === 'TV') || parts[0];
+    out.push({ ...main, parts });
+  }
+  return out;
 }
 
 export async function detail(id) {

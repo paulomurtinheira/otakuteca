@@ -33,8 +33,9 @@ const REL = {
   ADAPTATION: 'Adaptação', ALTERNATIVE: 'Alternativa', SUMMARY: 'Resumo', CONTAINS: 'Contém', SOURCE: 'Fonte', COMPILATION: 'Compilação',
 };
 
-export function openDetail(base) {
+export function openDetail(base, parts = null) {
   const sh = openSheet();
+  const series = parts && parts.length > 1 ? parts : null; // temporadas e filmes da mesma série, vindos da pesquisa
   const stack = [];
   let cur = base, extra = null, ticket = 0;
   let root = sh.body;
@@ -91,7 +92,7 @@ export function openDetail(base) {
     trackBox = h('div', { class: 'box' });
     watchBox = h('div', { class: 'box' });
     extraBox = h('div', { class: 'extra' });
-    root.append(hero, h('div', { class: 'sheet-content' }, trackBox, watchBox, mine ? personal(mine) : null, extraBox));
+    root.append(hero, h('div', { class: 'sheet-content' }, trackBox, seriesBox(), watchBox, mine ? personal(mine) : null, extraBox));
     renderTrack();
     renderExtra();
   }
@@ -273,6 +274,22 @@ export function openDetail(base) {
     dateEnd.value = m.end || '';
   }
 
+  // faixa horizontal de títulos clicáveis
+  const rail = (title, list) => list.length ? h('div', { class: 'box nopad' },
+    h('h4', { class: 'pad-x' }, title),
+    h('div', { class: 'rail' }, list.map(({ item, label }) =>
+      h('button', { class: 'mini', onclick: () => show(item) },
+        h('div', { class: 'mini-c', style: { '--c': item.color || '#6d5bd0' } }, coverImg(item), get(keyOf(item.type, item.id)) ? h('span', { class: 'mini-tick' }, icon('check', 12)) : null),
+        h('div', { class: 'mini-t' }, titleOf(item)),
+        label ? h('div', { class: 'mini-l' }, label) : null)))) : null;
+
+  // as outras temporadas, filmes e especiais (só quando se chega a partir da pesquisa)
+  function seriesBox() {
+    if (!series) return null;
+    const others = series.filter((p) => p.id !== cur.id);
+    return rail(`Temporadas e filmes (${series.length})`, others.map((item) => ({ item, label: [item.fmt && item.fmt.replace('_', ' '), item.year].filter(Boolean).join(' · ') })));
+  }
+
   // ---------- informação extra (vem do AniList) ----------
   function renderExtra() {
     if (!extraBox) return;
@@ -298,14 +315,6 @@ export function openDetail(base) {
       extraBox.append(h('div', { class: 'box' }, h('h4', null, 'Ver / saber mais'),
         h('div', { class: 'chips' }, links.map(([t, u, ic]) => h('a', { class: 'btn small', href: u, target: '_blank', rel: 'noopener' }, icon(ic, 15), ' ' + t)))));
     }
-
-    const rail = (title, list) => list.length ? h('div', { class: 'box nopad' },
-      h('h4', { class: 'pad-x' }, title),
-      h('div', { class: 'rail' }, list.map(({ item, label }) =>
-        h('button', { class: 'mini', onclick: () => show(item) },
-          h('div', { class: 'mini-c', style: { '--c': item.color || '#6d5bd0' } }, coverImg(item), get(keyOf(item.type, item.id)) ? h('span', { class: 'mini-tick' }, icon('check', 12)) : null),
-          h('div', { class: 'mini-t' }, titleOf(item)),
-          label ? h('div', { class: 'mini-l' }, label) : null)))) : null;
 
     const rels = (d.relations || []).map((r) => ({ item: r.item, label: REL[r.rel] || r.rel }));
     extraBox.append(rail('Relacionados', rels), rail('Quem gostou também gostou de', (d.recs || []).map((item) => ({ item }))));
