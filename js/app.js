@@ -65,8 +65,8 @@ function markActive() {
 function route() {
   const mode = access();
   document.body.classList.toggle('welcome-mode', mode === 'welcome');
-  const hash = location.hash.replace(/^#\/?/, '') || (mode === 'account' ? 'library' : 'discover');
-  name = ROUTES[hash] ? hash : (mode === 'account' ? 'library' : 'discover');
+  const [seg, sub] = (location.hash.replace(/^#\/?/, '') || (mode === 'account' ? 'library' : 'discover')).split('/'); // ex.: settings/sites
+  name = ROUTES[seg] ? seg : (mode === 'account' ? 'library' : 'discover');
   if (view?.destroy) view.destroy();
   clear(main);
   main.scrollTop = 0;
@@ -80,7 +80,7 @@ function route() {
     view = mountGate(page, 'A ' + ROUTES[name].label.toLowerCase());
     document.title = ROUTES[name].label + ' · Otakuteca';
   } else {
-    view = ROUTES[name].view.mount(page) || {};
+    view = ROUTES[name].view.mount(page, sub) || {};
     document.title = ROUTES[name].label + ' · Otakuteca';
   }
   markActive();

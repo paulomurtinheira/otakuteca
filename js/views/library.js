@@ -83,7 +83,7 @@ export function mount(root) {
     if (!mine.length) {
       grid.append(emptyState('📺', 'A tua lista está vazia', 'Procura um anime para começares, ou traz a tua lista do AniList / MyAnimeList.', [
         { label: 'Procurar anime', primary: true, onClick: () => (location.hash = '#/discover') },
-        { label: 'Importar lista', onClick: () => (location.hash = '#/settings') },
+        { label: 'Importar lista', onClick: () => (location.hash = '#/settings/data') },
       ]));
       return;
     }

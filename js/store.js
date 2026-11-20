@@ -6,7 +6,7 @@ import { dayStr, clamp } from './util.js';
 const DK = 'otk_data_v1';   // a tua lista
 const CK = 'otk_cfg_v1';    // definições deste aparelho (inclui o token do GitHub)
 const AK = 'otk_air_v1';    // cache dos próximos episódios (não sincroniza)
-const RK = 'otk_rel_v1';    // cache das séries: que títulos são da mesma série (não sincroniza)
+const RK = 'otk_rel_v2';    // cache das séries: que títulos são da mesma série (não sincroniza). v2: só o mesmo nome (sem Boruto no Naruto)
 
 export const STATUSES = ['WATCHING', 'PLANNED', 'COMPLETED', 'PAUSED', 'DROPPED'];
 const LABELS = {
@@ -14,6 +14,8 @@ const LABELS = {
   MANGA: { WATCHING: 'A ler', PLANNED: 'Planeado', COMPLETED: 'Concluído', PAUSED: 'Em pausa', DROPPED: 'Abandonado' },
 };
 export const statusLabel = (s, type) => LABELS[type === 'MANGA' ? 'MANGA' : 'ANIME'][s] || s;
+
+try { localStorage.removeItem('otk_rel_v1'); } catch { /* ok */ }
 
 function load(k, def) {
   try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : def; } catch { return def; }

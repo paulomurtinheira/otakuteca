@@ -69,7 +69,7 @@ export async function browse({ type = 'ANIME', search = '', sort, season, year, 
       Page(page:$page,perPage:24){
         pageInfo{hasNextPage}
         media(search:$search,type:$type,sort:$sort,season:$season,seasonYear:$year,genre:$genre,isAdult:false){
-          ...M startDate{year month day} relations{edges{relationType(version:2) node{id}}}
+          ...M startDate{year month day} relations{edges{relationType(version:2) node{id title{romaji english}}}}
         }
       }
     }`, {
@@ -80,7 +80,7 @@ export async function browse({ type = 'ANIME', search = '', sort, season, year, 
   const items = data.Page.media.map((m) => ({
     ...toItem(m),
     _sk: m.startDate?.year ? m.startDate.year * 10000 + (m.startDate.month || 0) * 100 + (m.startDate.day || 0) : 99999999,
-    _rel: (m.relations?.edges || []).filter((e) => SAME_SERIES.has(e.relationType)).map((e) => e.node?.id),
+    _rel: sameSeries(m, SAME_SERIES),
   }));
   return { items, more: data.Page.pageInfo.hasNextPage };
 }
@@ -90,24 +90,68 @@ const SAME_SERIES = new Set(['SEQUEL', 'PREQUEL', 'PARENT', 'SIDE_STORY', 'SUMMA
 const FRANCHISE_LINKS = new Set(['SEQUEL', 'PREQUEL', 'PARENT', 'SIDE_STORY']);
 const FRANCHISE_FORMATS = new Set(['TV', 'MOVIE', 'ONA']); // temporadas e filmes (sem OVAs, especiais, resumos nem músicas)
 
+// ---- o que é "a mesma série" ----
+// O AniList liga tudo o que vem a seguir (o Boruto aparece como sequela do Naruto), mas é outro anime.
+// Por isso, para duas partes serem da mesma série, o título tem de ter o mesmo nome (Naruto, Naruto Shippuden, Naruto the Movie…).
+// Exceção: filmes tipo "The Last: Naruto the Movie", que levam o nome da série noutro sítio do título,
+// desde que não sejam o início de uma série própria (o "Boruto: Naruto the Movie" tem irmãos Boruto, por isso fica de fora).
+const STOP = new Set(['the', 'a', 'an', 'gekijouban', 'eiga', 'movie']);
+const words = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter((w) => w && !STOP.has(w));
+/** O "nome" de um título: a primeira palavra (duas se for curta, como "Re:Zero" ou "Dr. Stone"), em romaji e em inglês. */
+function leads(title) {
+  const out = new Set();
+  for (const t of [title?.romaji, title?.english]) {
+    const w = words(t);
+    if (w.length) out.add(w[0].length < 3 && w[1] ? w[0] + ' ' + w[1] : w[0]);
+  }
+  return out;
+}
+const shares = (a, b) => [...a].some((x) => b.has(x));
+
+/** Ids das ligações de `m` que são da mesma série, do ponto de vista de `m`. */
+function sameSeries(m, types) {
+  const edges = (m.relations?.edges || []).filter((e) => e.node && types.has(e.relationType));
+  const mine = leads(m.title);
+  const named = edges.filter((e) => shares(mine, leads(e.node.title)));
+  const out = new Set(named.map((e) => e.node.id));
+  if (!named.length) {
+    // sem irmãos com o mesmo nome: pode ser um filme "Algo: Naruto the Movie" que leva o nome da série no meio
+    const flat = ' ' + [m.title?.romaji, m.title?.english].flatMap(words).join(' ') + ' ';
+    for (const e of edges) if ([...leads(e.node.title)].some((l) => flat.includes(' ' + l + ' '))) out.add(e.node.id);
+  }
+  return [...out];
+}
+
 /**
- * A série toda de um anime: segue as ligações (sequela, prequela, história paralela) até não haver mais.
+ * A série toda de um anime: segue as ligações (sequela, prequela, história paralela) mas só entre títulos da mesma série.
  * Devolve as temporadas e filmes (menos o próprio, que já está) e as ligações de cada título.
  */
 export async function franchise(id, max = 40) {
-  const seen = new Set([id]);
+  const queued = new Set([id]);
+  const parent = new Map();       // quem descobriu cada título
+  const accepted = new Map();     // id -> nome (leads) dos títulos que já são da série
   const media = new Map();
   const rel = {};
   let frontier = [id];
-  for (let round = 0; round < 8 && frontier.length && seen.size <= max; round++) {
+  for (let round = 0; round < 8 && frontier.length && queued.size <= max; round++) {
     const data = await gql(`${M} query($ids:[Int]){ Page(page:1,perPage:50){ media(id_in:$ids,type:ANIME){
-        ...M relations{edges{relationType(version:2) node{id}}} } } }`, { ids: frontier }, 30 * 60e3);
+        ...M relations{edges{relationType(version:2) node{id title{romaji english}}}} } } }`, { ids: frontier }, 30 * 60e3);
     const next = [];
     for (const m of data.Page.media) {
+      const links = sameSeries(m, FRANCHISE_LINKS);
+      if (m.id !== id) {
+        // entra se tem o mesmo nome de quem o descobriu, ou se leva o nome da série e se liga a alguém que já é da série
+        const from = accepted.get(parent.get(m.id));
+        const ok = (from && shares(leads(m.title), from)) || links.some((l) => accepted.has(l));
+        if (!ok) continue;
+      }
+      accepted.set(m.id, leads(m.title));
       media.set(m.id, m);
-      const links = (m.relations?.edges || []).filter((e) => e.node && FRANCHISE_LINKS.has(e.relationType)).map((e) => e.node.id);
       rel[m.id] = links;
-      for (const n of links) if (!seen.has(n)) { seen.add(n); next.push(n); }
+      // os candidatos seguintes são todas as ligações; cada um decide por si se é da série
+      for (const e of m.relations?.edges || []) {
+        if (e.node && FRANCHISE_LINKS.has(e.relationType) && !queued.has(e.node.id)) { queued.add(e.node.id); parent.set(e.node.id, m.id); next.push(e.node.id); }
+      }
     }
     frontier = next.slice(0, 50);
   }
@@ -121,11 +165,9 @@ export async function seriesLinks(ids) {
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     const data = await gql(`query($ids:[Int]){ Page(page:1,perPage:50){ media(id_in:$ids){
-        id relations{edges{relationType(version:2) node{id}}} } } }`, { ids: chunk }, 60e3);
+        id title{romaji english} relations{edges{relationType(version:2) node{id title{romaji english}}}} } } }`, { ids: chunk }, 60e3);
     for (const id of chunk) out[id] = [];
-    for (const m of data.Page.media) {
-      out[m.id] = (m.relations?.edges || []).filter((e) => SAME_SERIES.has(e.relationType) && e.node).map((e) => e.node.id);
-    }
+    for (const m of data.Page.media) out[m.id] = sameSeries(m, SAME_SERIES);
   }
   return out;
 }

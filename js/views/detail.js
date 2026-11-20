@@ -10,6 +10,7 @@ import { icon, openSheet, toast, coverImg, confirmSheet } from '../ui.js';
 import { list as mySources, buildUrl, isSearch } from '../sources.js';
 import { hasAccount } from '../account.js';
 import { addRestOfSeries, groupLibrary } from '../series.js';
+import { paintTheme, isDark } from '../theme.js';
 
 export const MOODS = [
   ['cry', '😭', 'Chorei'], ['hype', '🔥', 'Hype'], ['mind', '🤯', 'Mind-blown'], ['lol', '😂', 'Muito engraçado'],
@@ -41,6 +42,7 @@ export function openDetail(base, parts = null) {
   let cur = base, extra = null, ticket = 0;
   let root = sh.body;
   let trackBox, watchBox, extraBox, seriesHost, dateStart, dateEnd;
+  let dark = isDark(); // o tema do anime tem versão escura e clara; o botão da lua/sol troca só nesta folha
 
   const keyNow = () => keyOf(cur.type, cur.id);
 
@@ -71,6 +73,7 @@ export function openDetail(base, parts = null) {
     const mine = get(k);
     const it = mine || cur;
     clear(root);
+    paintTheme(sh.panel, it.color, dark);
 
     const bannerSrc = it.banner || it.cover;
     const hero = h('div', { class: 'hero', style: { '--c': it.color || '#6d5bd0' } },
@@ -78,7 +81,12 @@ export function openDetail(base, parts = null) {
       h('div', { class: 'hero-fade' }),
       h('div', { class: 'hero-top' },
         stack.length ? h('button', { class: 'icon-btn glass', onclick: back, 'aria-label': 'Voltar' }, icon('back')) : h('span'),
-        h('button', { class: 'icon-btn glass', onclick: sh.close, 'aria-label': 'Fechar' }, icon('x'))),
+        h('div', { class: 'row gap' },
+          state.cfg.animeTheme === false ? null : h('button', {
+            class: 'icon-btn glass', title: dark ? 'Tema claro deste anime' : 'Tema escuro deste anime', 'aria-label': 'Trocar entre tema claro e escuro',
+            onclick() { dark = !dark; render(); },
+          }, icon(dark ? 'sun' : 'moon')),
+          h('button', { class: 'icon-btn glass', onclick: sh.close, 'aria-label': 'Fechar' }, icon('x')))),
       h('div', { class: 'hero-in' },
         h('div', { class: 'hero-cover' }, coverImg(it)),
         h('div', { class: 'hero-info' },
@@ -113,7 +121,7 @@ export function openDetail(base, parts = null) {
     watchBox.append(h('h4', null, `Ver episódio ${ep}`));
     if (!mySites.length) {
       watchBox.append(h('p', { class: 'muted small' }, 'Escolhe os sites onde costumas ver e aparecem aqui como botões, já com o título e o episódio.'),
-        h('a', { class: 'btn small', href: '#/settings', onclick: sh.close }, icon('sliders', 15), ' Configurar os meus sites'));
+        h('a', { class: 'btn small', href: '#/settings/sites', onclick: sh.close }, icon('sliders', 15), ' Configurar os meus sites'));
       return;
     }
     const open = (url, kind, cls, ...kids) => h('a', { class: cls, href: buildUrl(url, it, ep, kind), target: '_blank', rel: 'noopener noreferrer', referrerPolicy: 'no-referrer' }, ...kids);
@@ -136,7 +144,7 @@ export function openDetail(base, parts = null) {
     if (!hasAccount()) {
       trackBox.append(h('div', { class: 'gate-mini' },
         h('p', { class: 'small' }, 'Para adicionares isto a uma lista, marcares o progresso e dares nota precisas de conta.'),
-        h('a', { class: 'btn primary small', href: '#/settings', onclick: sh.close }, 'Criar conta / entrar')));
+        h('a', { class: 'btn primary small', href: '#/settings/account', onclick: sh.close }, 'Criar conta / entrar')));
       return;
     }
 
@@ -324,6 +332,14 @@ export function openDetail(base, parts = null) {
             h('div', { class: 'pr-m' }, [p.fmt && p.fmt.replace('_', ' '), p.year, p.eps ? `${p.prog}/${p.eps} ep.` : null, statusLabel(p.status, p.type)].filter(Boolean).join(' · '))),
           h('div', { class: 'pr-btns' },
             h('button', { class: 'btn small ' + (p.status === 'COMPLETED' ? 'primary' : 'ghost'), title: p.status === 'COMPLETED' ? 'Marcar como por ver' : 'Marcar como vista', 'aria-label': 'Vista', onclick: () => act(() => (p.status === 'COMPLETED' ? markUnseen(p.k) : markSeen(p.k))) }, icon('check', 15)),
+            h('button', {
+              class: 'btn small ghost', title: 'Tirar da lista', 'aria-label': 'Tirar da lista',
+              onclick() {
+                const old = remove(p.k);
+                toast('Tirado da lista: ' + titleOf(p), { undo() { restore(old); paintSeries(); } });
+                if (p.id === cur.id) sh.close(); else paintSeries();
+              },
+            }, icon('trash', 15)),
             idx > 0 ? h('button', { class: 'btn small ghost', title: 'Marca esta e todas as anteriores como vistas', onclick: () => act(() => items.slice(0, idx + 1).forEach((x) => markSeen(x.k))) }, 'até aqui') : null)))),
       h('p', { class: 'muted small' }, 'Toca no nome para abrir essa temporada e marcar os episódios.'));
   }
