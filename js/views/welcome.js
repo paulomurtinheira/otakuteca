@@ -2,7 +2,7 @@
 // uma área que precisa de conta.
 
 import { h } from '../util.js';
-import { setCfg } from '../store.js';
+import { state, setCfg } from '../store.js';
 import { syncNow } from '../sync.js';
 import { signIn, clientId } from '../gdrive.js';
 import { icon, toast } from '../ui.js';
@@ -42,6 +42,8 @@ export function mountWelcome(root) {
       onclick() { setCfg({ guest: true }); location.hash = '#/discover'; },
     }, 'Seguir como convidado'),
     h('p', { class: 'muted small' }, 'Como convidado podes pesquisar e descobrir animes e mangas. Para criar listas, ter a agenda e as estatísticas precisas de conta.'),
+    // quem saiu da conta admin (GitHub) volta a ela com um toque
+    state.cfg.ghStash ? h('button', { class: 'btn ghost small', onclick() { setCfg({ ...state.cfg.ghStash, ghStash: null, provider: '', gEmail: '' }); syncNow(true); location.hash = '#/library'; } }, 'Voltar à conta admin') : null,
     h('p', { class: 'muted small' }, h('a', { href: 'privacidade.html', target: '_blank', rel: 'noopener' }, 'Política de privacidade'))));
   return {};
 }

@@ -138,6 +138,19 @@ function account(body) {
   function paint() {
     clear(box);
     const on = provider() === 'google';
+    // conta admin (GitHub) que deixaste de lado com "Sair": um toque e voltas a ela
+    const stash = state.cfg.ghStash;
+    if (stash && provider() !== 'github') {
+      box.append(group(null, [row({
+        ic: 'sliders', color: '#8b5cf6', title: 'Voltar à conta admin', sub: 'GitHub · ' + stash.repo,
+        onclick() {
+          signOut();
+          setCfg({ ...stash, ghStash: null, provider: 'github', gEmail: '' });
+          syncNow(true);
+          paint(); say('Voltaste à conta admin (GitHub).', 'good');
+        },
+      })]));
+    }
     if (on) {
       box.append(
         h('div', { class: 'profile static' },
@@ -150,7 +163,17 @@ function account(body) {
           h('button', { class: 'set-row danger', onclick() { signOut(); paint(); say('Sessão terminada. A lista continua neste aparelho.'); } }, h('span', { class: 'set-t' }, 'Terminar sessão')),
         ]));
     } else if (provider() === 'github') {
-      box.append(group(null, [row({ ic: 'sliders', color: '#8b5cf6', title: 'Ligado pelo GitHub', sub: state.cfg.repo, href: '#/settings/advanced' })]));
+      box.append(
+        group(null, [row({ ic: 'sliders', color: '#8b5cf6', title: 'Conta admin (GitHub)', sub: state.cfg.repo, href: '#/settings/advanced' })]),
+        group(null, [h('button', {
+          class: 'set-row danger',
+          onclick() {
+            const { repo, token, path, branch } = state.cfg;
+            setCfg({ ghStash: { repo, token, path, branch }, repo: '', token: '', lastSync: 0 });
+            paint(); say('Saíste da conta admin. A lista continua neste aparelho. Para voltar: Definições → Conta → "Voltar à conta admin".');
+          },
+        }, h('span', { class: 'set-t' }, 'Sair da conta admin'))],
+        'Guardamos os dados da conta admin neste aparelho, por isso voltas a ela com um toque. Depois de sair, podes entrar com Google como qualquer cliente.'));
     } else {
       box.append(h('div', { class: 'set-hero' },
         h('span', { class: 'avatar big' }, icon('user', 34)),
