@@ -144,7 +144,7 @@ function account(body) {
           h('span', { class: 'avatar' }, (state.cfg.gEmail || '?')[0].toUpperCase()),
           h('span', { class: 'profile-t' }, h('b', null, state.cfg.gEmail), h('small', null, 'Google')), syncChip()),
         group(null, [
-          row({ ic: 'refresh', color: '#3b82f6', title: 'Sincronizar agora', sub: 'Último sync: ' + ago(state.cfg.lastSync), onclick: async () => { await syncNow(); say('Sincronizado.', 'good'); paint(); } }),
+          row({ ic: 'refresh', color: '#3b82f6', title: 'Sincronizar agora', sub: 'Último sync: ' + ago(state.cfg.lastSync), onclick: async () => { say('A sincronizar…'); await syncNow(true); if (sync.status === 'ok') say('Sincronizado ✔', 'good'); else say(sync.msg || 'Não consegui sincronizar.', 'bad'); paint(); } }),
         ], 'A lista fica numa pasta escondida da tua Google Drive que só esta app vê. A Google pede a renovação do login de hora a hora: quando aparecer "Toca para renovar login", toca em qualquer sítio da app.'),
         group(null, [
           h('button', { class: 'set-row danger', onclick() { signOut(); paint(); say('Sessão terminada. A lista continua neste aparelho.'); } }, h('span', { class: 'set-t' }, 'Terminar sessão')),

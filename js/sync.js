@@ -95,19 +95,33 @@ async function put(text, sha) {
   return 'ok';
 }
 
-let busy = false, again = false, timer = 0, armed = false;
+let running = null, again = false, timer = 0, armed = false;
 
-/** Sem login válido a Google só abre a janela de renovação a partir de um toque: espera pelo próximo. */
+/**
+ * Sem login válido a Google só abre a janela de renovação a partir de um toque (um "click", que é o que o Safari aceita):
+ * espera pelo próximo toque em qualquer sítio da app.
+ */
 function armRenew() {
   if (armed) return;
   armed = true;
-  document.addEventListener('pointerdown', () => { armed = false; syncNow(); }, { once: true, capture: true });
+  document.addEventListener('click', () => { armed = false; syncNow(true); }, { once: true, capture: true });
 }
 
-export async function syncNow() {
-  if (!configured()) return;
-  if (busy) { again = true; return; }
-  busy = true;
+/** `user` = veio de um toque do utilizador (só aí a Google deixa abrir a janela de login). */
+export function syncNow(user = false) {
+  if (!configured()) return Promise.resolve();
+  if (provider() === 'google' && !gd.hasToken() && !user) {
+    // sem toque não vale a pena tentar: o browser bloquearia a janela. Avisa e espera pelo próximo toque
+    if (sync.status !== 'login') set('login', 'Toca em qualquer sítio da app para renovar o login da Google.');
+    armRenew();
+    return Promise.resolve();
+  }
+  if (running) { again = true; return running; } // quem chama espera por esta sincronização em curso
+  running = run().finally(() => { running = null; });
+  return running;
+}
+
+async function run() {
   set('syncing');
   const be = provider() === 'google' ? gd : { pull, put };
   try {
@@ -122,10 +136,9 @@ export async function syncNow() {
     }
     throw new Error('Conflitos repetidos. Tenta outra vez daqui a pouco.');
   } catch (e) {
-    if (e.login) { set('login', e.message); armRenew(); }
+    if (e.login) { again = false; set('login', e.message); armRenew(); }
     else set(navigator.onLine ? 'error' : 'offline', navigator.onLine ? e.message : 'Sem ligação. Fica guardado neste aparelho e sincroniza quando voltares online.');
   } finally {
-    busy = false;
     if (again) { again = false; schedule(1500); }
   }
 }

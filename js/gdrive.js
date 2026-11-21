@@ -42,18 +42,21 @@ export function getToken(interactive) {
   const id = clientId();
   if (!id) return Promise.reject(new Error('Falta o ID de cliente da Google (ver Definições).'));
   const ask = () => new Promise((ok, bad) => {
+    // se a janela nunca responder (bloqueada, esquecida), não deixa a sincronização presa para sempre
+    const timer = setTimeout(() => bad(loginError('A janela de login não respondeu. Toca para tentar outra vez.')), interactive ? 120e3 : 25e3);
+    const done = (f, v) => { clearTimeout(timer); f(v); };
     const c = window.google.accounts.oauth2.initTokenClient({
       client_id: id,
       scope: SCOPE,
       hint: state.cfg.gEmail || undefined,
       callback: (r) => {
-        if (r.error) return bad(loginError(r.error_description || r.error));
+        if (r.error) return done(bad, loginError(r.error_description || r.error));
         tok = { value: r.access_token, exp: Date.now() + (+r.expires_in || 3600) * 1000 };
-        ok(tok.value);
+        done(ok, tok.value);
       },
-      error_callback: (e) => bad(loginError(e?.type === 'popup_closed'
+      error_callback: (e) => done(bad, loginError(e?.type === 'popup_closed'
         ? 'Fechaste a janela de login.'
-        : 'A janela de login não abriu. Toca em "Entrar com Google".')),
+        : 'A janela de login não abriu. Permite janelas pop-up para este site e toca outra vez. Se continuar, em Conta toca em "Terminar sessão" e entra de novo.')),
     });
     c.requestAccessToken({ prompt: interactive ? 'select_account' : '' });
   });
